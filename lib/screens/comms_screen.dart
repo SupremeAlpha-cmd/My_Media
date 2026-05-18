@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
+import 'package:provider/provider.dart';
 import '../theme/pro_media_theme.dart';
 import '../services/comms_service.dart';
+import '../providers/app_state.dart';
 
 class CommsScreen extends StatefulWidget {
   const CommsScreen({super.key});
@@ -13,6 +15,12 @@ class CommsScreen extends StatefulWidget {
 class _CommsScreenState extends State<CommsScreen> {
   bool _isTalking = false;
   final CommsService _commsService = CommsService();
+
+  @override
+  void initState() {
+    super.initState();
+    _commsService.initialize();
+  }
 
   @override
   void dispose() {
@@ -57,7 +65,8 @@ class _CommsScreenState extends State<CommsScreen> {
                 GestureDetector(
           onTapDown: (_) {
             setState(() => _isTalking = true);
-            _commsService.startTalking();
+            final targetIp = context.read<AppState>().vmixIp;
+            _commsService.startTalking(targetIp);
           },
           onTapUp: (_) {
             setState(() => _isTalking = false);

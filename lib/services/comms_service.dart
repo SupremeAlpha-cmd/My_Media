@@ -1,39 +1,68 @@
 import 'dart:io';
+import 'dart:async';
+import 'package:flutter/services.dart';
 import 'package:record/record.dart';
-import 'package:audioplayers/audioplayers.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:path/path.dart' as p;
+import 'package:flutter/foundation.dart';
 
 class CommsService {
   final _audioRecorder = AudioRecorder();
-  final _audioPlayer = AudioPlayer();
-  String? _currentPath;
+  RawDatagramSocket? _socket;
+  final _channel = const MethodChannel('com.example.my_media/audio');
+  StreamSubscription? _recordSub;
 
-  Future<void> startTalking() async {
+  Future<void> initialize() async {
+    if (kIsWeb) return; // UDP not supported on web
+    
+    try {
+      _socket = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 5000);
+      _socket?.listen((RawSocketEvent event) {
+        if (event == RawSocketEvent.read) {
+          Datagram? datagram = _socket?.receive();
+          if (datagram != null && !kIsWeb) {
+             _channel.invokeMethod('playBytes', {'bytes': datagram.data});
+          }
+        }
+      });
+    } catch (e) {
+      debugPrint('Error binding UDP socket: $e');
+    }
+  }
+
+  Future<void> startTalking(String targetIp) async {
     if (await _audioRecorder.hasPermission()) {
-      final dir = await getTemporaryDirectory();
-      _currentPath = p.join(dir.path, 'comms_temp.m4a');
+      const config = RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 44100,
+        numChannels: 1,
+      );
       
-      const config = RecordConfig();
-      await _audioRecorder.start(config, path: _currentPath!);
+      final stream = await _audioRecorder.startStream(config);
+      _recordSub = stream.listen((data) {
+        if (!kIsWeb && _socket != null) {
+          try {
+            final address = InternetAddress(targetIp);
+            _socket?.send(data, address, 5000);
+            
+            // Loopback for local testing if target is localhost
+            if (targetIp == '127.0.0.1') {
+              _channel.invokeMethod('playBytes', {'bytes': data});
+            }
+          } catch (e) {
+            // Ignore send errors
+          }
+        }
+      });
     }
   }
 
   Future<void> stopTalking() async {
-    final path = await _audioRecorder.stop();
-    if (path != null) {
-      // In a real MVP, you'd send this bytes over a socket here.
-      // For testing, we'll just log it.
-      print('Audio captured for transmission: $path');
-    }
-  }
-
-  Future<void> playIncomingAudio(String path) async {
-    await _audioPlayer.play(DeviceFileSource(path));
+    await _recordSub?.cancel();
+    _recordSub = null;
+    await _audioRecorder.stop();
   }
 
   void dispose() {
+    _socket?.close();
     _audioRecorder.dispose();
-    _audioPlayer.dispose();
   }
 }
