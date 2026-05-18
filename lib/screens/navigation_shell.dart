@@ -9,6 +9,7 @@ import 'camera_screen.dart';
 import 'comms_screen.dart';
 import 'gallery_screen.dart';
 import 'settings_screen.dart';
+import 'help_screen.dart';
 
 class NavigationShell extends StatefulWidget {
   const NavigationShell({super.key});
@@ -50,6 +51,14 @@ class _NavigationShellState extends State<NavigationShell> {
       appBar: AppBar(
         title: const Text('MY MEDIA'),
         actions: [
+          IconButton(
+            icon: const Icon(Symbols.help),
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const HelpScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Symbols.settings),
             onPressed: () {
